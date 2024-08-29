@@ -127,7 +127,7 @@ static inline void rt_swap_implementation(void* a, void *b, size_t bytes) {
     unsigned long: rt_swap_implementation(&a, &b, sizeof(unsigned long)), \
     default:  rt_swap_implementation(&a, &b, sizeof(a)))
 
-#define rt_const_log2(size) ( \
+#define rt_const_log2_of_pow2(size) ( \
     (size) == 1ULL          ? 0  : \
     (size) == (1ULL << 1)   ? 1  : \
     (size) == (1ULL << 2)   ? 2  : \

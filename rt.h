@@ -15,11 +15,24 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#ifdef _WIN32
+#include <direct.h> // chdir
+#else
+#include <unistd.h>
+#include <dirent.h>
+#endif
+
 #ifdef _MSC_VER // cl.exe compiler:
-#pragma warning(disable: 5045) // Compiler will insert Spectre mitigation
 #pragma warning(disable: 4710) // '...': function not inlined
 #pragma warning(disable: 4711) // function '...' selected for automatic inline expansion
 #pragma warning(disable: 4820) // '...' bytes padding added after data member '...'
+#pragma warning(disable: 4996) // The POSIX name for this item is deprecated.
+#pragma warning(disable: 5045) // Compiler will insert Spectre mitigation
+#pragma warning(disable: 6262) // Function uses > 16k of stack
+#endif
+
+#if defined(_DEBUG) && !defined(DEBUG)
+#define DEBUG // clang & gcc make use DEBUG, Microsoft _DEBUG
 #endif
 
 #define null ((void*)0) // like null_ptr better than NULL (0)
