@@ -6,7 +6,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\aha.c" />
+    <ClCompile Include="..\ahc.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\rt.h" />

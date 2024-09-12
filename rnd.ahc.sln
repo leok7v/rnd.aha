@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.35122.118
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ahc", "vcx\ahc.vcxproj", "{EC89B251-7955-4A08-83DA-DF1E805C520E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		debug|arm64 = debug|arm64
+		debug|x64 = debug|x64
+		debug|x86 = debug|x86
+		release|arm64 = release|arm64
+		release|x64 = release|x64
+		release|x86 = release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.debug|arm64.ActiveCfg = debug|ARM64
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.debug|arm64.Build.0 = debug|ARM64
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.debug|x64.ActiveCfg = debug|x64
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.debug|x64.Build.0 = debug|x64
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.debug|x86.ActiveCfg = debug|Win32
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.debug|x86.Build.0 = debug|Win32
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.release|arm64.ActiveCfg = release|arm64
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.release|arm64.Build.0 = release|arm64
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.release|x64.ActiveCfg = release|x64
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.release|x64.Build.0 = release|x64
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.release|x86.ActiveCfg = release|Win32
+		{EC89B251-7955-4A08-83DA-DF1E805C520E}.release|x86.Build.0 = release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = TRUE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E7318585-DBF5-4175-9BCE-29E95A079BF8}
+	EndGlobalSection
+EndGlobal

@@ -13,17 +13,12 @@
 
 #undef NULL
 #undef assert
-#undef countof
 
-#define countof(...) rt_countof(__VA_ARGS__)
-#define NULL null
 #define assert(...)  rt_assert(__VA_ARGS__)
 #define printf(...)  rt_printf(__VA_ARGS__)
-#define println(...) rt_println(__VA_ARGS__)
-#define swear(...)   rt_swear(__VA_ARGS__) // runtime assert
 
-static bool aha_stats;
-static bool aha_verify;
+static bool ahc_stats;
+static bool ahc_verify;
 
 typedef struct {
     uint64_t freq;
@@ -32,12 +27,12 @@ typedef struct {
     int32_t  rix;  // right
     int32_t  bits; // 0 for root
     uint64_t path;
-} aha_node_t;
+} ahc_node_t;
 
 typedef struct {
     int32_t n;
     int32_t depth; // max tree depth seen
-    aha_node_t* node;
+    ahc_node_t* node;
     int32_t next;  // next non-terminal nodes in the tree >= n
     int32_t complete; // no more inc freq updates
     // stats:
@@ -48,38 +43,9 @@ typedef struct {
         size_t each; // report stats on each bytes (e.g. 16 * 1024)
         size_t bits; // encoded bits
     } stats;
-} aha_tree_t;
+} ahc_tree_t;
 
-static inline bool aha_is_left(aha_tree_t* t, int32_t i) {
-    assert(t->node[i].pix >= 0);
-    const int32_t pix = t->node[i].pix;
-    assert(t->node[pix].lix >= 0 && t->node[pix].rix >= 0);
-    return t->node[pix].lix == i;
-}
-
-static inline bool aha_is_right(aha_tree_t* t, int32_t i) {
-    assert(t->node[i].pix >= 0);
-    const int32_t pix = t->node[i].pix;
-    assert(t->node[pix].lix >= 0 && t->node[pix].rix >= 0);
-    return t->node[pix].rix == i;
-}
-
-static inline bool aha_is_leaf(aha_tree_t* t, int32_t i) {
-    const int32_t m = t->n * 2 - 1; (void)m;
-    assert(0 <= i && i < m);
-    const bool leaf = i < t->n;
-    if (leaf) {
-        assert(t->node[i].lix < 0);
-        assert(t->node[i].rix < 0);
-    } else {
-        assert(t->node[i].lix != -1 || t->node[i].rix != -1);
-        assert(t->node[i].lix == -1 || 0 <= t->node[i].lix && t->node[i].lix < m);
-        assert(t->node[i].rix == -1 || 0 <= t->node[i].rix && t->node[i].rix < m);
-    }
-    return leaf;
-}
-
-static int32_t aha_tree_depth(aha_tree_t* t) {
+static int32_t ahc_tree_depth(ahc_tree_t* t) {
     int32_t depth = 0;
     for (int32_t i = 0; i < t->n; i++) {
         if (depth < t->node[i].bits) { depth = t->node[i].bits; }
@@ -88,7 +54,7 @@ static int32_t aha_tree_depth(aha_tree_t* t) {
     return depth;
 }
 
-static const char* aha_path2str(uint64_t path, int32_t bits) {
+static const char* ahc_path2str(uint64_t path, int32_t bits) {
     static char str[64];
     str[bits] = '\0';
     for (int32_t b = 0; b < bits; b++) {
@@ -97,7 +63,7 @@ static const char* aha_path2str(uint64_t path, int32_t bits) {
     return str;
 }
 
-static void aha_print_level(aha_tree_t* t, int32_t tab, int32_t bits) {
+static void ahc_print_level(ahc_tree_t* t, int32_t tab, int32_t bits) {
     const int32_t m = t->n * 2 - 1;
     printf("%*c", tab * 6, 0x20);
     if (bits == 0) {
@@ -110,22 +76,22 @@ static void aha_print_level(aha_tree_t* t, int32_t tab, int32_t bits) {
         }
     }
     printf("\n");
-    if (tab > 0) { aha_print_level(t, tab - 1, bits + 1); }
+    if (tab > 0) { ahc_print_level(t, tab - 1, bits + 1); }
 }
 
-static void aha_print_tree(aha_tree_t* t) {
+static void ahc_print_tree(ahc_tree_t* t) {
     const int32_t m = t->n * 2 - 1;
-    const int32_t depth = aha_tree_depth(t);
+    const int32_t depth = ahc_tree_depth(t);
     printf("depth: %d\n", depth);
-    aha_print_level(t, depth, 0);
+    ahc_print_level(t, depth, 0);
     for (int i = m - 1; i >= 0; i--) {
         printf("[%3d] bits: %3d freq: %6lld \"%s\"\n",
                 i, t->node[i].bits, t->node[i].freq,
-                aha_path2str(t->node[i].path, t->node[i].bits));
+                ahc_path2str(t->node[i].path, t->node[i].bits));
     }
 }
 
-static void aha_verify_node(aha_tree_t* t, int32_t ix) {
+static void ahc_verify_node(ahc_tree_t* t, int32_t ix) {
     const int32_t m = t->n * 2 - 1; (void)m;
     assert(0 <= ix && ix < m);
     const int32_t pix = t->node[ix].pix;
@@ -157,8 +123,8 @@ static void aha_verify_node(aha_tree_t* t, int32_t ix) {
             assert(t->node[rix].path == (path | (1ULL << bits)));
             assert(t->node[ix].freq == t->node[lix].freq + t->node[rix].freq);
             assert(t->node[lix].freq <= t->node[rix].freq);
-            aha_verify_node(t, lix);
-            aha_verify_node(t, rix);
+            ahc_verify_node(t, lix);
+            ahc_verify_node(t, rix);
         } else {
             assert(lix == -1 && rix >= 0);
             assert(0 <= rix && rix < m);
@@ -166,19 +132,19 @@ static void aha_verify_node(aha_tree_t* t, int32_t ix) {
             assert(path == (t->node[rix].path & mask));
             assert(t->node[rix].path == (path | (1ULL << bits)));
             assert(t->node[ix].freq == t->node[rix].freq);
-            aha_verify_node(t, rix);
+            ahc_verify_node(t, rix);
         }
     }
 }
 
-static void aha_verify_tree(aha_tree_t* t) {
-    if (aha_verify) {
+static void ahc_verify_tree(ahc_tree_t* t) {
+    if (ahc_verify) {
         const int32_t m = t->n * 2 - 1;
-        aha_verify_node(t, m - 1);
+        ahc_verify_node(t, m - 1);
     }
 }
 
-static void aha_update_paths(aha_tree_t* t, int32_t i) {
+static void ahc_update_paths(ahc_tree_t* t, int32_t i) {
     t->stats.updates++;
     const int32_t m = t->n * 2 - 1;
     if (i == m - 1) { t->depth = 0; } // root
@@ -191,22 +157,22 @@ static void aha_update_paths(aha_tree_t* t, int32_t i) {
     if (lix != -1) {
         t->node[lix].bits = bits + 1;
         t->node[lix].path = path;
-        aha_update_paths(t, lix);
+        ahc_update_paths(t, lix);
     }
     if (rix != -1) {
         t->node[rix].bits = bits + 1;
         t->node[rix].path = path | (1ULL << bits);
-        aha_update_paths(t, rix);
+        ahc_update_paths(t, rix);
     }
     if (bits > t->depth) { t->depth = bits; }
 }
 
-static int32_t aha_swap_siblings_if_necessary(aha_tree_t* t, const int32_t ix) {
+static int32_t ahc_swap_siblings_if_necessary(ahc_tree_t* t, const int32_t ix) {
     const int32_t m = t->n * 2 - 1;
     assert(0 <= ix && ix < m);
     if (ix < m - 1) { // not root
         const int32_t pix = t->node[ix].pix;
-        assert(!aha_is_leaf(t, pix)); // parent (cannot be a leaf)
+        assert(pix >= t->n); // parent (cannot be a leaf)
         const int32_t lix = t->node[pix].lix;
         const int32_t rix = t->node[pix].rix;
         if (lix >= 0 && rix >= 0) {
@@ -215,7 +181,7 @@ static int32_t aha_swap_siblings_if_necessary(aha_tree_t* t, const int32_t ix) {
                 t->stats.swaps++;
                 t->node[pix].lix = rix;
                 t->node[pix].rix = lix;
-                aha_update_paths(t, pix); // because swap changed all path below
+                ahc_update_paths(t, pix); // because swap changed all path below
                 return ix == lix ? rix : lix;
             }
         }
@@ -223,9 +189,9 @@ static int32_t aha_swap_siblings_if_necessary(aha_tree_t* t, const int32_t ix) {
     return ix;
 }
 
-static void aha_frequency_changed(aha_tree_t* t, int32_t i);
+static void ahc_frequency_changed(ahc_tree_t* t, int32_t i);
 
-static void aha_update_freq(aha_tree_t* t, int32_t i) {
+static void ahc_update_freq(ahc_tree_t* t, int32_t i) {
     const int32_t lix = t->node[i].lix;
     const int32_t rix = t->node[i].rix;
     assert(lix != -1 || rix != -1); // at least one leaf present
@@ -233,7 +199,7 @@ static void aha_update_freq(aha_tree_t* t, int32_t i) {
                       (rix >= 0 ? t->node[rix].freq : 0);
 }
 
-static void aha_move_up(aha_tree_t* t, int32_t i) {
+static void ahc_move_up(ahc_tree_t* t, int32_t i) {
     const int32_t pix = t->node[i].pix; // parent
     assert(pix != -1);
     const int32_t gix = t->node[pix].pix; // grandparent
@@ -255,36 +221,36 @@ static void aha_move_up(aha_tree_t* t, int32_t i) {
         }
         t->node[pix].rix = psx;
         t->node[psx].pix = pix;
-        aha_update_freq(t, pix);
-        aha_update_freq(t, gix);
-        aha_swap_siblings_if_necessary(t, i);
-        aha_swap_siblings_if_necessary(t, psx);
-        aha_swap_siblings_if_necessary(t, pix);
-        aha_update_paths(t, gix);
-        aha_frequency_changed(t, gix);
+        ahc_update_freq(t, pix);
+        ahc_update_freq(t, gix);
+        ahc_swap_siblings_if_necessary(t, i);
+        ahc_swap_siblings_if_necessary(t, psx);
+        ahc_swap_siblings_if_necessary(t, pix);
+        ahc_update_paths(t, gix);
+        ahc_frequency_changed(t, gix);
     }
 }
 
-static void aha_frequency_changed(aha_tree_t* t, int32_t i) {
+static void ahc_frequency_changed(ahc_tree_t* t, int32_t i) {
     const int32_t m = t->n * 2 - 1; (void)m;
     const int32_t pix = t->node[i].pix;
     if (pix == -1) { // `i` is root
         assert(i == m - 1);
-        aha_update_freq(t, i);
-        i = aha_swap_siblings_if_necessary(t, i);
+        ahc_update_freq(t, i);
+        i = ahc_swap_siblings_if_necessary(t, i);
     } else {
         assert(0 <= pix && pix < m);
-        aha_update_freq(t, pix);
-        i = aha_swap_siblings_if_necessary(t, i);
-        aha_frequency_changed(t, pix);
+        ahc_update_freq(t, pix);
+        i = ahc_swap_siblings_if_necessary(t, i);
+        ahc_frequency_changed(t, pix);
     }
     if (pix != -1 && t->node[pix].pix != -1 && i == t->node[pix].rix) {
         assert(t->node[i].freq >= t->node[t->node[pix].lix].freq);
-        aha_move_up(t, i);
+        ahc_move_up(t, i);
     }
 }
 
-static void aha_insert(aha_tree_t* t, int32_t i) {
+static void ahc_insert(ahc_tree_t* t, int32_t i) {
     const int32_t root = t->n * 2 - 1 - 1;
     int32_t ipx = root;
     assert(t->node[i].pix == -1 && t->node[i].lix == -1 && t->node[i].rix == -1);
@@ -307,7 +273,7 @@ static void aha_insert(aha_tree_t* t, int32_t i) {
     }
     if (ipx >= t->n) { // not a leaf, inserted
         t->node[ipx].freq++;
-        aha_swap_siblings_if_necessary(t, i);
+        ahc_swap_siblings_if_necessary(t, i);
         assert(t->node[ipx].lix == i || t->node[ipx].rix);
         assert(t->node[ipx].freq ==
                 (t->node[ipx].rix >= 0 ? t->node[t->node[ipx].rix].freq : 0) +
@@ -319,7 +285,7 @@ static void aha_insert(aha_tree_t* t, int32_t i) {
         } else {
             t->next--;
             int32_t nix = t->next;
-            t->node[nix] = (aha_node_t){
+            t->node[nix] = (ahc_node_t){
                 .freq = t->node[ipx].freq,
                 .lix = ipx,
                 .rix = -1,
@@ -341,17 +307,17 @@ static void aha_insert(aha_tree_t* t, int32_t i) {
             t->node[i].pix = nix;
             t->node[i].bits = t->node[nix].bits + 1;
             t->node[i].path = t->node[nix].path | (1ULL << t->node[nix].bits);
-            aha_update_freq(t, nix);
+            ahc_update_freq(t, nix);
             ipx = nix;
         }
     }
-    aha_frequency_changed(t, i);
-    aha_update_paths(t, ipx);
+    ahc_frequency_changed(t, i);
+    ahc_update_paths(t, ipx);
     assert(t->node[i].freq != 0 && t->node[i].bits != 0);
-    aha_verify_tree(t);
+    ahc_verify_tree(t);
 }
 
-static void aha_inc_node_frequency(aha_tree_t* t, int32_t i) {
+static void ahc_inc_node_frequency(ahc_tree_t* t, int32_t i) {
     assert(0 <= i && i < t->n); // terminal
     // If input sequence frequencies are severely skewed (e.g. Lucas numbers
     // similar to Fibonacci numbers) and input sequence is long enough.
@@ -360,22 +326,20 @@ static void aha_inc_node_frequency(aha_tree_t* t, int32_t i) {
     // L(81) = 18,446,744,073,709,551,616 not actually realistic but
     // better be safe than sorry:
     if (t->node[i].pix == -1) {
-        aha_insert(t, i); // Unseen terminal node.
+        ahc_insert(t, i); // Unseen terminal node.
     } else if (!t->complete && t->depth < 63 && t->node[i].freq < UINT64_MAX - 1) {
         t->node[i].freq++;
-        aha_frequency_changed(t, i);
+        ahc_frequency_changed(t, i);
     } else {
         // ignore future frequency updates
         t->complete = 1;
     }
 }
 
-static void aha_init(aha_tree_t* t, aha_node_t nodes[], const int32_t m) {
-    swear(m > 3); // must pow(2, bits_per_symbol) * 2 - 1
+static void ahc_init(ahc_tree_t* t, ahc_node_t nodes[], const int32_t m) {
+    assert(m > 3); // must pow(2, bits_per_symbol) * 2 - 1
     const int32_t n = (m + 1) / 2;
-    swear(n > 2 && (n & (n - 1)) == 0); // must be power of 2
-    const int32_t bits_per_symbol = rt_const_log2_of_pow2(n);
-    swear(bits_per_symbol >= 2);
+    assert(n > 4 && (n & (n - 1)) == 0); // must be power of 2
     memset(&t->stats, 0x00, sizeof(t->stats));
     t->node = nodes;
     t->n = n;
@@ -383,13 +347,13 @@ static void aha_init(aha_tree_t* t, aha_node_t nodes[], const int32_t m) {
     t->depth = 0;
     t->complete = 0;
     for (int32_t i = 0; i < m; i++) {
-        t->node[i] = (aha_node_t){
+        t->node[i] = (ahc_node_t){
             .freq = 0, .pix = -1, .lix = -1, .rix = -1, .bits = 0, .path = 0
         };
     }
 }
 
-static uint32_t aha_random32(uint32_t* state) {
+static uint32_t ahc_random32(uint32_t* state) {
     // https://gist.github.com/tommyettinger/46a874533244883189143505d203312c
     static thread_local bool started; // first seed must be odd
     if (!started) { started = true; *state |= 1; }
@@ -399,13 +363,13 @@ static uint32_t aha_random32(uint32_t* state) {
     return z ^ (z >> 14);
 }
 
-static double aha_random(void) { // [0..1[
+static double ahc_random(void) { // [0..1[
     static uint32_t seed = 1;
-    return (double)aha_random32(&seed) / ((double)UINT32_MAX + 1);
+    return (double)ahc_random32(&seed) / ((double)UINT32_MAX + 1);
 }
 
-static int32_t aha_next_random_symbol(uint64_t cf[], uint64_t sum, int32_t n) {
-    uint64_t r = (uint64_t)(aha_random() * sum);
+static int32_t ahc_next_random_symbol(uint64_t cf[], uint64_t sum, int32_t n) {
+    uint64_t r = (uint64_t)(ahc_random() * sum);
     for (int32_t i = 0; i < n; i++) {
         if (r <= cf[i]) { return i; }
     }
@@ -414,30 +378,30 @@ static int32_t aha_next_random_symbol(uint64_t cf[], uint64_t sum, int32_t n) {
     return n;
 }
 
-static void aha_shuffle(uint64_t a[], int32_t n) {
+static void ahc_shuffle(uint64_t a[], int32_t n) {
     for (int32_t i = n - 1; i > 0; i--) {
-        uint64_t j = (uint64_t)(aha_random() * (i + 1));
+        uint64_t j = (uint64_t)(ahc_random() * (i + 1));
         uint64_t swap = a[i]; a[i] = a[j]; a[j] = swap;
 //      rt_swap(a[i], a[j]);
     }
 }
 
-// Shannon aha_entropy of frequencies distribution
+// Shannon ahc_entropy of frequencies distribution
 
-static double aha_entropy(uint64_t freq[], int32_t n) {
+static double ahc_entropy(uint64_t freq[], int32_t n) {
     double total = 0;
-    double aha_entropy = 0.0;
+    double ahc_entropy = 0.0;
     for (int32_t i = 0; i < n; i++) { total += (double)freq[i]; }
     for (int32_t i = 0; i < n; i++) {
         if (freq[i] > 0) {
             double p_i = (double)freq[i] / total;
-            aha_entropy += p_i * log2(p_i);
+            ahc_entropy += p_i * log2(p_i);
         }
     }
-    return -aha_entropy;
+    return -ahc_entropy;
 }
 
-static void aha_generate_geometric(uint64_t freq[], int32_t n,
+static void ahc_generate_geometric(uint64_t freq[], int32_t n,
         double base, int64_t initial_value) {
     freq[0] = initial_value;
     for (int32_t i = 1; i < n; i++) {
@@ -450,20 +414,20 @@ static void test(void) {
     uint64_t freq[n];
     double base = 1.05;  // Adjust this base to control how quickly values grow
     int64_t initial_value = 100;  // Adjust the initial value to scale the frequencies
-    aha_generate_geometric(freq, n, base, initial_value);
-    aha_shuffle(freq, n);
+    ahc_generate_geometric(freq, n, base, initial_value);
+    ahc_shuffle(freq, n);
     uint64_t cf[n] = {0}; // cumulative frequency
     uint64_t total = 0; // total sum of all frequencies
     for (int32_t i = 0; i < n; i++) {
         total += freq[i];
         cf[i] = total;
     }
-    aha_tree_t tree = {0};
-    aha_node_t nodes[m];
-    aha_tree_t* t = &tree;
-    aha_init(t, nodes, countof(nodes));
+    ahc_tree_t tree = {0};
+    ahc_node_t node[m];
+    ahc_tree_t* t = &tree;
+    ahc_init(t, node, sizeof(node) / sizeof(node[0]));
     // insert NYE (Not Yet Encoded) marker symbol
-    aha_inc_node_frequency(t, n / 2);
+    ahc_inc_node_frequency(t, n / 2);
     int32_t  count = 0;
     uint64_t depth_sum = 0;
     uint64_t max_freq  = 2;
@@ -472,17 +436,17 @@ static void test(void) {
     enum { N = 10 * 1000 * 1000 };
     assert(t->node != null); // for IntelliSense
     for (int32_t i = 0; i < N; i++) {
-        int32_t s = aha_next_random_symbol(cf, total, n);
+        int32_t s = ahc_next_random_symbol(cf, total, n);
         assert(0 <= s && s < n);
         actual[s]++;
         bits += t->node[s].bits;
-        aha_inc_node_frequency(t, s);
+        ahc_inc_node_frequency(t, s);
         max_freq = t->node[s].freq;
-        int32_t depth = aha_tree_depth(t);
+        int32_t depth = ahc_tree_depth(t);
         depth_sum += depth;
         count++;
     }
-//  aha_print_tree(t);
+//  ahc_print_tree(t);
     #ifdef HUFFMAN_DUMP_ACTUAL_FREQUENCIES
         uint64_t total = 0;
         for (int32_t i = 0; i < n; i++) {
@@ -494,7 +458,7 @@ static void test(void) {
     #endif
     printf("\xF0\x9F\x93\xA6 depth max: %d bps: %.1f "
            "Shannon Entropy H: %.3f \n",
-           t->depth, (double)bits / (double)N, aha_entropy(freq, n));
+           t->depth, (double)bits / (double)N, ahc_entropy(freq, n));
     printf("\n");
 }
 
@@ -569,7 +533,7 @@ static void bitstream_dispose(bitstream_t* bs) {
     memset(bs, 0x00, sizeof(*bs));
 }
 
-static errno_t aha_encode(aha_tree_t* t, const uint8_t data[],
+static errno_t ahc_encode(ahc_tree_t* t, const uint8_t data[],
                           size_t bytes, bitstream_t* bs) {
     errno_t r = 0;
     size_t sc = t->stats.swaps;
@@ -577,16 +541,16 @@ static errno_t aha_encode(aha_tree_t* t, const uint8_t data[],
     size_t uc = t->stats.updates;
     for (size_t i = 0; r == 0 && i < bytes; i++) {
         int32_t sym = data[i];
-        aha_node_t* s = &t->node[sym];
+        ahc_node_t* s = &t->node[sym];
         if (s->bits == 0) { // first seen, escape with NYE (not yet encoded):
-            aha_node_t* nye = &t->node[t->n / 2];
+            ahc_node_t* nye = &t->node[t->n / 2];
             for (int32_t b = 0; r == 0 && b < nye->bits; b++) {
                 r = bs->write_bit(bs, (nye->path >> b) & 1);
                 t->stats.bits++;
             }
 //          printf("%02X: ", sym);
-            const int32_t bits_per_symbol = rt_const_log2_of_pow2(t->n) - 1;
-            for (int32_t b = 0; r == 0 && b < bits_per_symbol; b++) {
+            const int32_t bps = rt_const_log2_of_pow2(t->n) - 1;
+            for (int32_t b = 0; r == 0 && b < bps; b++) {
                 r = bs->write_bit(bs, (sym >> b) & 1);
 //              printf("%d", (sym >> b) & 1);
                 t->stats.bits++;
@@ -598,18 +562,18 @@ static errno_t aha_encode(aha_tree_t* t, const uint8_t data[],
                 t->stats.bits++;
             }
         }
-        aha_inc_node_frequency(t, sym);
+        ahc_inc_node_frequency(t, sym);
         #ifdef DEBUG
-            aha_verify_tree(t);
+            ahc_verify_tree(t);
         #endif
         if (t->stats.each > 0 && i % t->stats.each == t->stats.each - 1) {
             const double d = (double)t->stats.each;
             size_t ds = t->stats.swaps - sc;
             size_t dm = t->stats.moves - mc;
             size_t du = t->stats.updates - uc;
-            println("[%07lld] swap: %5d \xF0\x9F\x94\x84 %.3f "
-                             "move: %5d \xF0\x9F\x94\x83 %.3f "
-                             "path: %5d \xF0\x9F\x8C\xB3 %.3f",
+            printf("[%07lld] swap: %5d \xF0\x9F\x94\x84 %.3f "
+                            "move: %5d \xF0\x9F\x94\x83 %.3f "
+                            "path: %5d \xF0\x9F\x8C\xB3 %.3f\n",
                     i,
                     ds, ds / d,
                     dm, dm / d,
@@ -626,7 +590,7 @@ static errno_t aha_encode(aha_tree_t* t, const uint8_t data[],
     return r;
 }
 
-static errno_t aha_decode(aha_tree_t* t, bitstream_t* bs, int32_t *symbol) {
+static errno_t ahc_decode(ahc_tree_t* t, bitstream_t* bs, int32_t *symbol) {
     const int32_t m = t->n * 2 - 1;
     int32_t i = m - 1; // root
     bool bit = 0;
@@ -641,28 +605,28 @@ static errno_t aha_decode(aha_tree_t* t, bitstream_t* bs, int32_t *symbol) {
     if (sym == t->n / 2) { // NYE (Not Yet Encoded) escape:
 //      printf("NYE: ");
         sym = 0;
-        const int32_t bits_per_symbol = rt_const_log2_of_pow2(t->n) - 1;
-        for (int32_t b = 0; b < bits_per_symbol && r == 0; b++) {
+        const int32_t bps = rt_const_log2_of_pow2(t->n) - 1;
+        for (int32_t b = 0; b < bps && r == 0; b++) {
             r = bs->read_bit(bs, &bit);
             sym |= (bit << b);
 //          printf("%d", bit);
         }
 //      printf(" %02X\n", sym);
     }
-    aha_inc_node_frequency(t, sym);
+    ahc_inc_node_frequency(t, sym);
     #ifdef DEBUG
-        aha_verify_tree(t);
+        ahc_verify_tree(t);
     #endif
     *symbol = sym;
     return r;
 }
 
-static bool aha_file_exist(const char* filename) {
+static bool ahc_file_exist(const char* filename) {
     struct stat st = {0};
     return stat(filename, &st) == 0;
 }
 
-static errno_t aha_file_size(FILE* f, size_t* size) {
+static errno_t ahc_file_size(FILE* f, size_t* size) {
     // on error returns (fpos_t)-1 and sets errno
     fpos_t pos = 0;
     if (fgetpos(f, &pos) != 0)      { return errno; }
@@ -675,9 +639,9 @@ static errno_t aha_file_size(FILE* f, size_t* size) {
     return 0;
 }
 
-static errno_t aha_read_fully(FILE* f, const uint8_t* *data, size_t *bytes) {
+static errno_t ahc_read_fully(FILE* f, const uint8_t* *data, size_t *bytes) {
     size_t size = 0;
-    errno_t r = aha_file_size(f, &size);
+    errno_t r = ahc_file_size(f, &size);
     if (r != 0) { return r; }
     if (size > SIZE_MAX) { return E2BIG; }
     uint8_t* p = (uint8_t*)malloc(size); // does set errno on failure
@@ -688,7 +652,7 @@ static errno_t aha_read_fully(FILE* f, const uint8_t* *data, size_t *bytes) {
     return 0;
 }
 
-static errno_t aha_read_whole_file(const char* fn,
+static errno_t ahc_read_whole_file(const char* fn,
                                    const uint8_t* *data, size_t *bytes) {
     FILE* f = null;
     errno_t r = fopen_s(&f, fn, "rb");
@@ -696,7 +660,7 @@ static errno_t aha_read_whole_file(const char* fn,
         printf("Failed to open file \"%s\": %s\n", fn, strerror(r));
         return r;
     }
-    r = aha_read_fully(f, data, bytes); // to the bh
+    r = ahc_read_fully(f, data, bytes); // to the bh
     if (r != 0) {
         printf("Failed to read file \"%s\": %s\n", fn, strerror(r));
         fclose(f);
@@ -706,67 +670,67 @@ static errno_t aha_read_whole_file(const char* fn,
     return fclose(f) == 0 ? 0 : errno;
 }
 
-static double aha_shannon_entropy(aha_tree_t* t) {
+static double ahc_shannon_entropy(ahc_tree_t* t) {
     enum { bps = 9, n = 1U << bps }; // bits per symbol
     assert(t->n == n);
     uint64_t freq[n];
     for (int32_t i = 0; i < n; i++) { freq[i] = t->node[i].freq; }
-    return aha_entropy(freq, n);
+    return ahc_entropy(freq, n);
 }
 
-static errno_t aha_test_encode_decode(const char* pathname,
+static errno_t ahc_test_encode_decode(const char* pathname,
                                       const uint8_t* data, size_t bytes) {
     enum { bps = 8 + 1, n = 1U << bps, m = n * 2 - 1 }; // `bps` bits per symbol
     bitstream_t bitstream;
     errno_t r = bitstream_create(&bitstream, bytes * 2);
-    aha_tree_t* t = null;
+    ahc_tree_t* t = null;
     if (r == 0) {
-        t = (aha_tree_t*)calloc(1, sizeof(aha_tree_t));
+        t = (ahc_tree_t*)calloc(1, sizeof(ahc_tree_t));
         if (t == null) { r = ENOMEM; }
     }
-    aha_node_t* nodes = null;
+    ahc_node_t* nodes = null;
     if (r == 0) {
-        nodes = (aha_node_t*)calloc(m, sizeof(aha_node_t));
+        nodes = (ahc_node_t*)calloc(m, sizeof(ahc_node_t));
         if (nodes == null) { r = ENOMEM; }
     }
     if (r == 0) {
-        aha_init(t, nodes, m);
+        ahc_init(t, nodes, m);
         // insert NYE (Not Yet Encoded) marker symbol
-        aha_inc_node_frequency(t, n / 2);
-        if (aha_stats) {
+        ahc_inc_node_frequency(t, n / 2);
+        if (ahc_stats) {
             t->stats.each = bytes / 16; // print stats 15 times
         }
-        r = aha_encode(t, (const uint8_t*)data, bytes, &bitstream);
+        r = ahc_encode(t, (const uint8_t*)data, bytes, &bitstream);
     }
     if (r == 0) {
         assert(t->stats.bits % 64 == 0);
-        int32_t depth = aha_tree_depth(t);
+        int32_t depth = ahc_tree_depth(t);
         double percent = 100.0 * bitstream.bytes / (double)bytes;
         const char* fn = strrchr(pathname, '\\'); // shorten
         if (fn == null) { fn = strrchr(pathname, '/'); }
         if (fn == null) { fn = pathname; } else { fn++; }
         percent = 100.0 * t->stats.bits / ((double)bytes * 8.0);
-        const double H = aha_shannon_entropy(t);
-        const double bits_per_symbol = (double)t->stats.bits / (double)bytes;
-        println("\xF0\x9F\x93\xA6 %7lld bytes into %7lld (%.1f%%) "
-                "depth: %d/%d bps: %.2f H: %.2f \"%s\"",
+        const double H = ahc_shannon_entropy(t);
+        const double bps = (double)t->stats.bits / (double)bytes;
+        printf("\xF0\x9F\x93\xA6 %7lld bytes into %7lld (%.1f%%) "
+               "depth: %d/%d bps: %.2f H: %.2f \"%s\"\n",
                 (uint64_t)bytes, (uint64_t)t->stats.bits / 8, percent,
-                depth, t->depth, bits_per_symbol, H, fn);
+                depth, t->depth, bps, H, fn);
     }
     free(nodes); nodes = null;
     free(t); t = null;
     if (r == 0) {
-        t = (aha_tree_t*)calloc(1, sizeof(aha_tree_t));
+        t = (ahc_tree_t*)calloc(1, sizeof(ahc_tree_t));
         if (t == null) { r = ENOMEM; }
     }
     if (r == 0) {
-        nodes = (aha_node_t*)calloc(m, sizeof(aha_node_t));
+        nodes = (ahc_node_t*)calloc(m, sizeof(ahc_node_t));
         if (nodes == null) { r = ENOMEM; }
     }
     if (r == 0) {
-        aha_init(t, nodes, m);
+        ahc_init(t, nodes, m);
         // insert NYE (Not Yet Encoded) marker symbol
-        aha_inc_node_frequency(t, n / 2);
+        ahc_inc_node_frequency(t, n / 2);
         uint8_t* decoded = (uint8_t*)malloc(bytes);
         if (decoded == null) {
             r = ENOMEM;
@@ -774,7 +738,7 @@ static errno_t aha_test_encode_decode(const char* pathname,
             size_t decoded_bytes = 0;
             for (size_t i = 0; i < bytes; i++) {
                 int32_t symbol = 0;
-                r = aha_decode(t, &bitstream, &symbol);
+                r = ahc_decode(t, &bitstream, &symbol);
                 decoded[i] = (uint8_t)symbol;
                 decoded_bytes++;
             }
@@ -796,15 +760,15 @@ static errno_t aha_test_encode_decode(const char* pathname,
     return r;
 }
 
-static errno_t aha_test_file(const char* filename) {
+static errno_t ahc_test_file(const char* filename) {
     errno_t r = ENOENT;
-    if (aha_file_exist(filename)) {
+    if (ahc_file_exist(filename)) {
         const uint8_t* data = null;
         size_t bytes = 0;
-        r = aha_read_whole_file(filename, &data, &bytes);
+        r = ahc_read_whole_file(filename, &data, &bytes);
         assert(r == 0);
         if (r == 0) {
-            r = aha_test_encode_decode(filename, data, bytes);
+            r = ahc_test_encode_decode(filename, data, bytes);
             free((void*)data);
         }
     }
@@ -818,14 +782,14 @@ static errno_t locate_test_folder(void) {
     // on X Code in MacOS it can be completely out of tree.
     // So we need to find the test files.
     for (;;) {
-        if (aha_file_exist("test/bible.txt")) { return 0; }
+        if (ahc_file_exist("test/bible.txt")) { return 0; }
         if (chdir("..") != 0) { return errno; }
     }
 }
 
 int main(int argc, const char* argv[]) {
     printf("Hello\xF0\x9F\x91\x8B "
-           "Adaptive Huffman Algorithm\xF0\x9F\x8C\x8D!\n");
+           "Adaptive Huffman Coding\xF0\x9F\x8C\x8D!\n");
     bool t = false; // --test
     bool s = false; // --stat
     bool c = false; // --check (verify tree on every byte)
@@ -834,22 +798,22 @@ int main(int argc, const char* argv[]) {
         s |= strcmp(argv[i], "--stat") == 0;
         c |= strcmp(argv[i], "--check") == 0;
     }
-    aha_stats = s;
-    aha_verify = s;
+    ahc_stats = s;
+    ahc_verify = s;
     if (t) { test(); }
     errno_t r = locate_test_folder();
-    if (r == 0) { r = aha_test_file("test/hhgttg.txt"); }
-    if (r == 0) { r = aha_test_file("test/bible.txt"); }
-    if (r == 0) { r = aha_test_file("test/arm64.elf"); }
-    if (r == 0) { r = aha_test_file("test/snow-crash.bmp"); }
-    if (r == 0) { r = aha_test_file("test/sqlite3.c.txt"); }
-    if (r == 0) { r = aha_test_file(__FILE__); }
-    if (r == 0) { r = aha_test_file(argv[0]); }
+    if (r == 0) { r = ahc_test_file("test/hhgttg.txt"); }
+    if (r == 0) { r = ahc_test_file("test/bible.txt"); }
+    if (r == 0) { r = ahc_test_file("test/arm64.elf"); }
+    if (r == 0) { r = ahc_test_file("test/snow-crash.bmp"); }
+    if (r == 0) { r = ahc_test_file("test/sqlite3.c.txt"); }
+    if (r == 0) { r = ahc_test_file(__FILE__); }
+    if (r == 0) { r = ahc_test_file(argv[0]); }
     if (r != 0) {
         printf("Goodbye \xF0\x9F\x98\x88 cruel \xF0\x9F\x98\xB1 "
                "Universe \xF0\x9F\x8C\xA0\xF0\x9F\x8C\x8C..."
                "\xF0\x9F\x92\xA4\n");
-        println("%s", strerror(r));
+        printf("%s\n", strerror(r));
     }
     return r;
 }
